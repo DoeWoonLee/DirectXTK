@@ -75,12 +75,14 @@ static_assert(sizeof(VertexPositionNormal) == 24, "Vertex struct/layout mismatch
 // Vertex struct holding position, color, and texture mapping information.
 const D3D11_INPUT_ELEMENT_DESC VertexPositionColorTexture::InputElements[] =
 {
-    { "SV_Position", 0, DXGI_FORMAT_R32G32B32_FLOAT,    0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+    { "SV_Position", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
     { "COLOR",       0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
     { "TEXCOORD",    0, DXGI_FORMAT_R32G32_FLOAT,       0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+    { "FLIP",        0, DXGI_FORMAT_R32G32_FLOAT,       0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+    { "SEQUENCE",    0, DXGI_FORMAT_R32_UINT,           0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0}
 };
 
-static_assert(sizeof(VertexPositionColorTexture) == 36, "Vertex struct/layout mismatch");
+static_assert(sizeof(VertexPositionColorTexture) == 52, "Vertex struct/layout mismatch");
 
 
 //--------------------------------------------------------------------------------------

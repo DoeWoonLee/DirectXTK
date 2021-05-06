@@ -73,7 +73,8 @@ public:
         FXMMATRIX transformMatrix);
     void End();
 
-    void XM_CALLCONV Draw(_In_ ID3D11ShaderResourceView* texture,
+    void XM_CALLCONV Draw(_In_ ID3D11ShaderResourceView** texture,
+        unsigned int texCnt,
         FXMVECTOR destination,
         _In_opt_ RECT const* sourceRectangle,
         FXMVECTOR color,
@@ -88,8 +89,9 @@ public:
         XMFLOAT4A destination;
         XMFLOAT4A color;
         XMFLOAT4A originRotationDepth;
-        ID3D11ShaderResourceView* texture;
-        unsigned int flags;
+        ID3D11ShaderResourceView** texture = nullptr;
+        uint32_t texCnt = 0;
+        unsigned int flags = 0;
 
 
         // Combine values from the public SpriteEffects enum with these internal-only flags.
@@ -112,12 +114,13 @@ private:
     void SortSprites();
     void GrowSortedSprites();
 
-    void RenderBatch(_In_ ID3D11ShaderResourceView* texture, _In_reads_(count) SpriteInfo const* const* sprites, size_t count);
+    void RenderBatch(_In_ ID3D11ShaderResourceView** texture, unsigned int texCnt, _In_reads_(count) SpriteInfo const* const* sprites, size_t count);
 
     static void XM_CALLCONV RenderSprite(_In_ SpriteInfo const* sprite,
         _Out_writes_(VerticesPerSprite) VertexPositionColorTexture* vertices,
         FXMVECTOR textureSize,
-        FXMVECTOR inverseTextureSize);
+        FXMVECTOR inverseTextureSize,
+        uint32_t batchIndex);
 
     static XMVECTOR GetTextureSize(_In_ ID3D11ShaderResourceView* texture);
     XMMATRIX GetViewportTransform(_In_ ID3D11DeviceContext* deviceContext, DXGI_MODE_ROTATION rotation );
@@ -148,7 +151,7 @@ private:
     // If each SpriteInfo instance held a refcount on its texture, could end up with
     // many redundant AddRef/Release calls on the same object, so instead we use
     // this separate list to hold just a single refcount each time we change texture.
-    std::vector<ComPtr<ID3D11ShaderResourceView>> mSpriteTextureReferences;
+    std::vector<ID3D11ShaderResourceView**> mSpriteTextureReferences;
 
 
     // Mode settings from the last Begin call.
@@ -449,7 +452,7 @@ void SpriteBatch::Impl::End()
 
 // Adds a single sprite to the queue.
 _Use_decl_annotations_
-void XM_CALLCONV SpriteBatch::Impl::Draw(ID3D11ShaderResourceView* texture,
+void XM_CALLCONV SpriteBatch::Impl::Draw(ID3D11ShaderResourceView** texture, unsigned int texCnt,
     FXMVECTOR destination,
     RECT const* sourceRectangle,
     FXMVECTOR color,
@@ -502,11 +505,12 @@ void XM_CALLCONV SpriteBatch::Impl::Draw(ID3D11ShaderResourceView* texture,
 
     sprite->texture = texture;
     sprite->flags = flags;
+    sprite->texCnt = texCnt;
 
     if (mSortMode == SpriteSortMode_Immediate)
     {
         // If we are in immediate mode, draw this sprite straight away.
-        RenderBatch(texture, &sprite, 1);
+        RenderBatch(texture, texCnt, &sprite, 1);
     }
     else
     {
@@ -517,7 +521,7 @@ void XM_CALLCONV SpriteBatch::Impl::Draw(ID3D11ShaderResourceView* texture,
         // back of the vector means we will add duplicate references if the caller switches back and forth
         // between multiple repeated textures, but calling AddRef more times than strictly necessary hurts
         // nothing, and is faster than scanning the whole list or using a map to detect all duplicates.
-        if (mSpriteTextureReferences.empty() || texture != mSpriteTextureReferences.back().Get())
+        if (mSpriteTextureReferences.empty() || texture != mSpriteTextureReferences.back())
         {
             mSpriteTextureReferences.emplace_back(texture);
         }
@@ -623,12 +627,12 @@ void SpriteBatch::Impl::FlushBatch()
     SortSprites();
 
     // Walk through the sorted sprite list, looking for adjacent entries that share a texture.
-    ID3D11ShaderResourceView* batchTexture = nullptr;
+    ID3D11ShaderResourceView** batchTexture = nullptr;
     size_t batchStart = 0;
 
     for (size_t pos = 0; pos < mSpriteQueueCount; pos++)
     {
-        ID3D11ShaderResourceView* texture = mSortedSprites[pos]->texture;
+        ID3D11ShaderResourceView** texture = mSortedSprites[pos]->texture;
 
         _Analysis_assume_(texture != nullptr);
 
@@ -637,7 +641,7 @@ void SpriteBatch::Impl::FlushBatch()
         {
             if (pos > batchStart)
             {
-                RenderBatch(batchTexture, &mSortedSprites[batchStart], pos - batchStart);
+                RenderBatch(batchTexture, mSortedSprites[batchStart]->texCnt, &mSortedSprites[batchStart], pos - batchStart);
             }
 
             batchTexture = texture;
@@ -646,7 +650,7 @@ void SpriteBatch::Impl::FlushBatch()
     }
 
     // Flush the final batch.
-    RenderBatch(batchTexture, &mSortedSprites[batchStart], mSpriteQueueCount - batchStart);
+    RenderBatch(batchTexture, mSortedSprites[batchStart]->texCnt, &mSortedSprites[batchStart], mSpriteQueueCount - batchStart);
 
     // Reset the queue.
     mSpriteQueueCount = 0;
@@ -722,16 +726,19 @@ void SpriteBatch::Impl::GrowSortedSprites()
 
 // Submits a batch of sprites to the GPU.
 _Use_decl_annotations_
-void SpriteBatch::Impl::RenderBatch(ID3D11ShaderResourceView* texture, SpriteInfo const* const* sprites, size_t count)
+void SpriteBatch::Impl::RenderBatch(ID3D11ShaderResourceView** texture,unsigned int texCnt, SpriteInfo const* const* sprites, size_t count)
 {
+    if (!texture)
+        return;
+
     auto deviceContext = mContextResources->deviceContext.Get();
 
     // Draw using the specified texture.
-    deviceContext->PSSetShaderResources(0, 1, &texture);
+    deviceContext->PSSetShaderResources(0, texCnt, texture);
 
-    XMVECTOR textureSize = GetTextureSize(texture);
+    XMVECTOR textureSize = GetTextureSize(texture[0]);
     XMVECTOR inverseTextureSize = XMVectorReciprocal(textureSize);
-            
+
     while (count > 0)
     {
         // How many sprites do we want to draw?
@@ -778,7 +785,7 @@ void SpriteBatch::Impl::RenderBatch(ID3D11ShaderResourceView* texture, SpriteInf
         {
             assert(i < count);
             _Analysis_assume_(i < count);
-            RenderSprite(sprites[i], vertices, textureSize, inverseTextureSize);
+            RenderSprite(sprites[i], vertices, textureSize, inverseTextureSize, (uint32_t)i);
 
             vertices += VerticesPerSprite;
         }
@@ -811,7 +818,8 @@ _Use_decl_annotations_
 void XM_CALLCONV SpriteBatch::Impl::RenderSprite(SpriteInfo const* sprite,
     VertexPositionColorTexture* vertices,
     FXMVECTOR textureSize,
-    FXMVECTOR inverseTextureSize)
+    FXMVECTOR inverseTextureSize,
+    uint32_t batchIndex)
 {
     // Load sprite parameters into SIMD registers.
     XMVECTOR source = XMLoadFloat4A(&sprite->source);
@@ -841,6 +849,15 @@ void XM_CALLCONV SpriteBatch::Impl::RenderSprite(SpriteInfo const* sprite,
     else
     {
         origin = XMVectorMultiply(origin, inverseTextureSize);
+    }
+    XMFLOAT2 flip = { 1.f, 1.f };
+    if (flags & SpriteEffects::SpriteEffects_FlipHorizontally)
+    {
+        flip.x = -1.f;
+    }
+    if (flags & SpriteEffects::SpriteEffects_FlipHorizontally)
+    {
+        flip.y = -1.f;
     }
 
     // If the destination size is relative to the source region, convert it to pixels.
@@ -917,6 +934,9 @@ void XM_CALLCONV SpriteBatch::Impl::RenderSprite(SpriteInfo const* sprite,
         XMVECTOR textureCoordinate = XMVectorMultiplyAdd(cornerOffsets[static_cast<unsigned int>(i) ^ mirrorBits], sourceSize, source);
 
         XMStoreFloat2(&vertices[i].textureCoordinate, textureCoordinate);
+
+        vertices[i].flip = flip;
+        vertices[i].sequence = batchIndex;
     }
 }
 
@@ -1057,16 +1077,16 @@ void SpriteBatch::End()
 
 
 _Use_decl_annotations_
-void XM_CALLCONV SpriteBatch::Draw(ID3D11ShaderResourceView* texture, XMFLOAT2 const& position, FXMVECTOR color)
+void XM_CALLCONV SpriteBatch::Draw(ID3D11ShaderResourceView** texture, unsigned int texCnt, XMFLOAT2 const& position, FXMVECTOR color)
 {
     XMVECTOR destination = XMVectorPermute<0, 1, 4, 5>(XMLoadFloat2(&position), g_XMOne); // x, y, 1, 1
     
-    pImpl->Draw(texture, destination, nullptr, color, g_XMZero, 0);
+    pImpl->Draw(texture, texCnt, destination, nullptr, color, g_XMZero, 0);
 }
 
 
 _Use_decl_annotations_
-void XM_CALLCONV SpriteBatch::Draw(ID3D11ShaderResourceView* texture,
+void XM_CALLCONV SpriteBatch::Draw(ID3D11ShaderResourceView** texture, unsigned int texCnt,
     XMFLOAT2 const& position,
     RECT const* sourceRectangle,
     FXMVECTOR color,
@@ -1080,12 +1100,12 @@ void XM_CALLCONV SpriteBatch::Draw(ID3D11ShaderResourceView* texture,
     
     XMVECTOR originRotationDepth = XMVectorSet(origin.x, origin.y, rotation, layerDepth);
 
-    pImpl->Draw(texture, destination, sourceRectangle, color, originRotationDepth, static_cast<unsigned int>(effects));
+    pImpl->Draw(texture, texCnt, destination, sourceRectangle, color, originRotationDepth, static_cast<unsigned int>(effects));
 }
 
 
 _Use_decl_annotations_
-void XM_CALLCONV SpriteBatch::Draw(ID3D11ShaderResourceView* texture,
+void XM_CALLCONV SpriteBatch::Draw(ID3D11ShaderResourceView** texture, unsigned int texCnt,
     XMFLOAT2 const& position,
     RECT const* sourceRectangle,
     FXMVECTOR color,
@@ -1099,21 +1119,21 @@ void XM_CALLCONV SpriteBatch::Draw(ID3D11ShaderResourceView* texture,
     
     XMVECTOR originRotationDepth = XMVectorSet(origin.x, origin.y, rotation, layerDepth);
     
-    pImpl->Draw(texture, destination, sourceRectangle, color, originRotationDepth, static_cast<unsigned int>(effects));
+    pImpl->Draw(texture, texCnt, destination, sourceRectangle, color, originRotationDepth, static_cast<unsigned int>(effects));
 }
 
 
 _Use_decl_annotations_
-void XM_CALLCONV SpriteBatch::Draw(ID3D11ShaderResourceView* texture, FXMVECTOR position, FXMVECTOR color)
+void XM_CALLCONV SpriteBatch::Draw(ID3D11ShaderResourceView** texture, unsigned int texCnt, FXMVECTOR position, FXMVECTOR color)
 {
     XMVECTOR destination = XMVectorPermute<0, 1, 4, 5>(position, g_XMOne); // x, y, 1, 1
     
-    pImpl->Draw(texture, destination, nullptr, color, g_XMZero, 0);
+    pImpl->Draw(texture, texCnt, destination, nullptr, color, g_XMZero, 0);
 }
 
 
 _Use_decl_annotations_
-void XM_CALLCONV SpriteBatch::Draw(ID3D11ShaderResourceView* texture,
+void XM_CALLCONV SpriteBatch::Draw(ID3D11ShaderResourceView** texture, unsigned int texCnt,
     FXMVECTOR position,
     RECT const* sourceRectangle,
     FXMVECTOR color,
@@ -1129,12 +1149,12 @@ void XM_CALLCONV SpriteBatch::Draw(ID3D11ShaderResourceView* texture,
 
     XMVECTOR originRotationDepth = XMVectorPermute<0, 1, 4, 5>(origin, rotationDepth);
     
-    pImpl->Draw(texture, destination, sourceRectangle, color, originRotationDepth, static_cast<unsigned int>(effects));
+    pImpl->Draw(texture, texCnt, destination, sourceRectangle, color, originRotationDepth, static_cast<unsigned int>(effects));
 }
 
 
 _Use_decl_annotations_
-void XM_CALLCONV SpriteBatch::Draw(ID3D11ShaderResourceView* texture,
+void XM_CALLCONV SpriteBatch::Draw(ID3D11ShaderResourceView** texture, unsigned int texCnt,
     FXMVECTOR position,
     RECT const* sourceRectangle,
     FXMVECTOR color,
@@ -1150,21 +1170,21 @@ void XM_CALLCONV SpriteBatch::Draw(ID3D11ShaderResourceView* texture,
 
     XMVECTOR originRotationDepth = XMVectorPermute<0, 1, 4, 5>(origin, rotationDepth);
 
-    pImpl->Draw(texture, destination, sourceRectangle, color, originRotationDepth, static_cast<unsigned int>(effects));
+    pImpl->Draw(texture, texCnt, destination, sourceRectangle, color, originRotationDepth, static_cast<unsigned int>(effects));
 }
 
 
 _Use_decl_annotations_
-void XM_CALLCONV SpriteBatch::Draw(ID3D11ShaderResourceView* texture, RECT const& destinationRectangle, FXMVECTOR color)
+void XM_CALLCONV SpriteBatch::Draw(ID3D11ShaderResourceView** texture, unsigned int texCnt, RECT const& destinationRectangle, FXMVECTOR color)
 {
     XMVECTOR destination = LoadRect(&destinationRectangle); // x, y, w, h
 
-    pImpl->Draw(texture, destination, nullptr, color, g_XMZero, Impl::SpriteInfo::DestSizeInPixels);
+    pImpl->Draw(texture, texCnt, destination, nullptr, color, g_XMZero, Impl::SpriteInfo::DestSizeInPixels);
 }
 
 
 _Use_decl_annotations_
-void XM_CALLCONV SpriteBatch::Draw(ID3D11ShaderResourceView* texture,
+void XM_CALLCONV SpriteBatch::Draw(ID3D11ShaderResourceView** texture, unsigned int texCnt,
     RECT const& destinationRectangle,
     RECT const* sourceRectangle,
     FXMVECTOR color,
@@ -1177,7 +1197,7 @@ void XM_CALLCONV SpriteBatch::Draw(ID3D11ShaderResourceView* texture,
 
     XMVECTOR originRotationDepth = XMVectorSet(origin.x, origin.y, rotation, layerDepth);
     
-    pImpl->Draw(texture, destination, sourceRectangle, color, originRotationDepth, static_cast<unsigned int>(effects) | Impl::SpriteInfo::DestSizeInPixels);
+    pImpl->Draw(texture, texCnt, destination, sourceRectangle, color, originRotationDepth, static_cast<unsigned int>(effects) | Impl::SpriteInfo::DestSizeInPixels);
 }
 
 

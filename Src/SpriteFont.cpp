@@ -483,7 +483,7 @@ void XM_CALLCONV SpriteFont::DrawString(_In_ SpriteBatch* spriteBatch, _In_z_ wc
             offset = XMVectorMultiplyAdd(glyphRect, axisIsMirroredTable[effects & 3], offset);
         }
 
-        spriteBatch->Draw(pImpl->texture.Get(), position, &glyph->Subrect, color, rotation, offset, scale, effects, layerDepth);
+        spriteBatch->Draw(pImpl->texture.GetAddressOf(),1, position, &glyph->Subrect, color, rotation, offset, scale, effects, layerDepth);
     }, true);
 }
 

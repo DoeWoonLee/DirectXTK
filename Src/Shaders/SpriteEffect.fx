@@ -15,15 +15,18 @@ cbuffer Parameters : register(b0)
 };
 
 
-void SpriteVertexShader(inout float4 color    : COLOR0,
+void SpriteVertexShader(inout float4 position : SV_Position,
+                        inout float4 color    : COLOR0,
                         inout float2 texCoord : TEXCOORD0,
-                        inout float4 position : SV_Position)
+                        in float2 flip        : FLIP0,
+                        in uint instanceId    : SEQUENCE0)
 {
-    position = mul(position, MatrixTransform);
+    position = mul(float4(position.xyz, 1.f), MatrixTransform);
 }
 
 
-float4 SpritePixelShader(float4 color    : COLOR0,
+float4 SpritePixelShader(float4 position : SV_POSITION,
+                         float4 color    : COLOR0,
                          float2 texCoord : TEXCOORD0) : SV_Target0
 {
     return Texture.Sample(TextureSampler, texCoord) * color;
