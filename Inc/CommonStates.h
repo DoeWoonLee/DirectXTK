@@ -37,6 +37,7 @@ namespace DirectX
         ID3D11BlendState* __cdecl AlphaBlend() const;
         ID3D11BlendState* __cdecl Additive() const;
         ID3D11BlendState* __cdecl NonPremultiplied() const;
+        ID3D11BlendState* __cdecl Screen() const;
 
         // Depth stencil states.
         ID3D11DepthStencilState* __cdecl DepthNone() const;

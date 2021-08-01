@@ -26,6 +26,8 @@ public:
       : mDevice(device)
     { }
 
+    HRESULT CreateBlendState(D3D11_BLEND srcBlend, D3D11_BLEND srcAlphaBlend,
+                             D3D11_BLEND destBlend, D3D11_BLEND destAlphaBlend, _Out_ ID3D11BlendState** pResult);
     HRESULT CreateBlendState(D3D11_BLEND srcBlend, D3D11_BLEND destBlend, _Out_ ID3D11BlendState** pResult);
     HRESULT CreateDepthStencilState(bool enable, bool writeEnable, _Out_ ID3D11DepthStencilState** pResult);
     HRESULT CreateRasterizerState(D3D11_CULL_MODE cullMode, D3D11_FILL_MODE fillMode, _Out_ ID3D11RasterizerState** pResult);
@@ -37,6 +39,7 @@ public:
     ComPtr<ID3D11BlendState> alphaBlend;
     ComPtr<ID3D11BlendState> additive;
     ComPtr<ID3D11BlendState> nonPremultiplied;
+    ComPtr<ID3D11BlendState> screen;
 
     ComPtr<ID3D11DepthStencilState> depthNone;
     ComPtr<ID3D11DepthStencilState> depthDefault;
@@ -63,6 +66,30 @@ public:
 // Global instance pool.
 SharedResourcePool<ID3D11Device*, CommonStates::Impl> CommonStates::Impl::instancePool;
 
+// Helper for creating detailed blend state objects.
+HRESULT CommonStates::Impl::CreateBlendState(D3D11_BLEND srcBlend, D3D11_BLEND srcAlphaBlend,
+                                        D3D11_BLEND destBlend, D3D11_BLEND destAlphaBlend,
+                                            ID3D11BlendState** pResult)
+{
+
+    D3D11_BLEND_DESC desc = {};
+
+    desc.RenderTarget[0].BlendEnable = (srcBlend != D3D11_BLEND_ONE) ||
+        (destBlend != D3D11_BLEND_ZERO);
+
+    desc.RenderTarget[0].SrcBlend = srcBlend;  desc.RenderTarget[0].SrcBlendAlpha = srcAlphaBlend;
+    desc.RenderTarget[0].DestBlend = destBlend;  desc.RenderTarget[0].DestBlendAlpha = destAlphaBlend;
+    desc.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD; desc.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
+
+    desc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+
+    HRESULT hr = mDevice->CreateBlendState(&desc, pResult);
+
+    if (SUCCEEDED(hr))
+        SetDebugObjectName(*pResult, "DirectXTK:CommonStates");
+
+    return hr;
+}
 
 // Helper for creating blend state objects.
 HRESULT CommonStates::Impl::CreateBlendState(D3D11_BLEND srcBlend, D3D11_BLEND destBlend, _Out_ ID3D11BlendState** pResult)
@@ -229,6 +256,17 @@ ID3D11BlendState* CommonStates::NonPremultiplied() const
     {
         return pImpl->CreateBlendState(D3D11_BLEND_SRC_ALPHA, D3D11_BLEND_INV_SRC_ALPHA, pResult);
     });
+}
+
+ID3D11BlendState* __cdecl DirectX::CommonStates::Screen() const
+{
+    return DemandCreate(pImpl->screen, pImpl->mutex, [&](ID3D11BlendState** pResult)
+        {
+            return pImpl->CreateBlendState(D3D11_BLEND_ONE,
+                D3D11_BLEND_ONE,
+                D3D11_BLEND_INV_SRC_COLOR,
+                D3D11_BLEND_INV_SRC_ALPHA, pResult);
+        });
 }
 
 
