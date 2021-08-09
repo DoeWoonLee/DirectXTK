@@ -40,6 +40,7 @@ public:
     ComPtr<ID3D11BlendState> additive;
     ComPtr<ID3D11BlendState> nonPremultiplied;
     ComPtr<ID3D11BlendState> screen;
+    ComPtr<ID3D11BlendState> multiply;
 
     ComPtr<ID3D11DepthStencilState> depthNone;
     ComPtr<ID3D11DepthStencilState> depthDefault;
@@ -79,7 +80,7 @@ HRESULT CommonStates::Impl::CreateBlendState(D3D11_BLEND srcBlend, D3D11_BLEND s
 
     desc.RenderTarget[0].SrcBlend = srcBlend;  desc.RenderTarget[0].SrcBlendAlpha = srcAlphaBlend;
     desc.RenderTarget[0].DestBlend = destBlend;  desc.RenderTarget[0].DestBlendAlpha = destAlphaBlend;
-    desc.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD; desc.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
+    desc.RenderTarget[0].BlendOp = desc.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
 
     desc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
 
@@ -263,8 +264,18 @@ ID3D11BlendState* __cdecl DirectX::CommonStates::Screen() const
     return DemandCreate(pImpl->screen, pImpl->mutex, [&](ID3D11BlendState** pResult)
         {
             return pImpl->CreateBlendState(D3D11_BLEND_ONE,
-                D3D11_BLEND_ONE,
+                D3D11_BLEND_SRC_ALPHA,
                 D3D11_BLEND_INV_SRC_COLOR,
+                D3D11_BLEND_INV_SRC_ALPHA, pResult);
+        });
+}
+ID3D11BlendState* __cdecl DirectX::CommonStates::Multiply() const
+{
+    return DemandCreate(pImpl->multiply, pImpl->mutex, [&](ID3D11BlendState** pResult)
+        {
+            return pImpl->CreateBlendState(D3D11_BLEND_DEST_COLOR,
+                D3D11_BLEND_SRC_ALPHA,
+                D3D11_BLEND_INV_SRC_ALPHA,
                 D3D11_BLEND_INV_SRC_ALPHA, pResult);
         });
 }
