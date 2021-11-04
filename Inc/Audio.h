@@ -368,6 +368,7 @@ namespace DirectX
     public:
         SoundEffect(_In_ AudioEngine* engine, _In_z_ const wchar_t* waveFileName);
 
+        SoundEffect(_In_ AudioEngine* engine, _In_z_  std::unique_ptr<uint8_t[]>& wavData, size_t audioBytes);
         SoundEffect(_In_ AudioEngine* engine, _Inout_ std::unique_ptr<uint8_t[]>& wavData,
             _In_ const WAVEFORMATEX* wfx, _In_reads_bytes_(audioBytes) const uint8_t* startAudio, size_t audioBytes);
 

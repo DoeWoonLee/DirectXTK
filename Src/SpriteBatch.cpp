@@ -855,7 +855,7 @@ void XM_CALLCONV SpriteBatch::Impl::RenderSprite(SpriteInfo const* sprite,
     {
         flip.x = -1.f;
     }
-    if (flags & SpriteEffects::SpriteEffects_FlipHorizontally)
+    if (flags & SpriteEffects::SpriteEffects_FlipVertically)
     {
         flip.y = -1.f;
     }

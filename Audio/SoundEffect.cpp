@@ -401,6 +401,32 @@ SoundEffect::SoundEffect(AudioEngine* engine, const wchar_t* waveFileName)
 
 
 _Use_decl_annotations_
+DirectX::SoundEffect::SoundEffect(AudioEngine* engine, std::unique_ptr<uint8_t[]>& wavData, size_t audioBytes)
+    : pImpl(std::make_unique<Impl>(engine))
+{
+    WAVData wavInfo;
+    HRESULT hr = LoadWAVAudioInMemoryEx(wavData.get(), audioBytes, wavInfo);
+    if (FAILED(hr))
+    {
+        DebugTrace("ERROR: SoundEffect failed (%08X) to load from file memory \n", static_cast<unsigned int>(hr));
+        throw std::runtime_error("SoundEffect");
+    }
+
+#ifdef DIRECTX_ENABLE_SEEK_TABLES
+    hr = pImpl->Initialize(engine, wavData, wavInfo.wfx, wavInfo.startAudio, wavInfo.audioBytes,
+        wavInfo.seek, wavInfo.seekCount,
+        wavInfo.loopStart, wavInfo.loopLength);
+#else
+    hr = pImpl->Initialize(engine, wavData, wavInfo.wfx, wavInfo.startAudio, wavInfo.audioBytes,
+        wavInfo.loopStart, wavInfo.loopLength);
+#endif
+    if (FAILED(hr))
+    {
+        DebugTrace("ERROR: SoundEffect failed (%08X) to intialize\n", static_cast<unsigned int>(hr));
+        throw std::runtime_error("SoundEffect");
+    }
+}
+_Use_decl_annotations_
 SoundEffect::SoundEffect(AudioEngine* engine, std::unique_ptr<uint8_t[]>& wavData,
                          const WAVEFORMATEX* wfx, const uint8_t* startAudio, size_t audioBytes)
     : pImpl(std::make_unique<Impl>(engine))

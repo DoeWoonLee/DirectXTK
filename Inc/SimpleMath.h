@@ -224,7 +224,7 @@ namespace DirectX
             Vector3(FXMVECTOR V) noexcept { XMStoreFloat3(this, V); }
             Vector3(const XMFLOAT3& V) noexcept { this->x = V.x; this->y = V.y; this->z = V.z; }
             explicit Vector3(const XMVECTORF32& F) noexcept { this->x = F.f[0]; this->y = F.f[1]; this->z = F.f[2]; }
-
+            explicit Vector3(const Vector2& v2) :XMFLOAT3(v2.x, v2.y, 0.f) {}
             Vector3(const Vector3&) = default;
             Vector3& operator=(const Vector3&) = default;
 
